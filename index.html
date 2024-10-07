@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Sentiment Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #results { margin-top: 20px; }
+        .tweet { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; }
+        .positive { background-color: #e6ffe6; }
+        .negative { background-color: #ffe6e6; }
+        .neutral { background-color: #e6e6e6; }
+    </style>
+</head>
+<body>
+    <h1>Social Media Sentiment Dashboard</h1>
+    {% if current_user.is_authenticated %}
+        <p>Welcome, {{ current_user.username }}! <a href="{{ url_for('logout') }}">Logout</a></p>
+        <form id="analyzeForm">
+            <input type="text" id="query" placeholder="Enter username or hashtag" required>
+            <button type="submit">Analyze</button>
+        </form>
+        <div id="results"></div>
+        <canvas id="sentimentChart" width="400" height="200"></canvas>
+        <p><a href="{{ url_for('history') }}">View Search History</a></p>
+    {% else %}
+        <p>Please <a href="{{ url_for('login') }}">login</a> or <a href="{{ url_for('register') }}">register</a> to use the dashboard.</p>
+    {% endif %}
+
+    <script>
+        const analyzeForm = document.getElementById('analyzeForm');
+        const resultsDiv = document.getElementById('results');
+        const ctx = document.getElementById('sentimentChart').getContext('2d');
+        let chart;
+
+        analyzeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('query').value;
+            const response = await axios.post('/analyze', `query=${query}`, {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+            displayResults(response.data);
+        });
+
+        function displayResults(results) {
+            resultsDiv.innerHTML = '';
+            let positiveCount = 0, negativeCount = 0, neutralCount = 0;
+
+            results.forEach(result => {
+                const tweetDiv = document.createElement('div');
+                tweetDiv.className = `tweet ${getSentimentClass(result.sentiment)}`;
+                tweetDiv.textContent = result.text;
+                resultsDiv.appendChild(tweetDiv);
+
+                if (result.sentiment > 0) positiveCount++;
+                else if (result.sentiment < 0) negativeCount++;
+                else neutralCount++;
+            });
+
+            updateChart(positiveCount, negativeCount, neutralCount);
+        }
+
+        function getSentimentClass(sentiment) {
+            if (sentiment > 0) return 'positive';
+            if (sentiment < 0) return 'negative';
+            return 'neutral';
+        }
+
+        function updateChart(positive, negative, neutral) {
+            if (chart) chart.destroy();
+            
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Positive', 'Negative', 'Neutral'],
+                    datasets: [{
+                        data: [positive, negative, neutral],
+                        backgroundColor: ['#e6ffe6', '#ffe6e6', '#e6e6e6']
+                    }]
+                }
+            });
+        }
+    </script>
+</body>
+</html>
