@@ -4,21 +4,23 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from textblob import TextBlob
-import json
 from datetime import datetime
 import tweepy
 from dotenv import load_dotenv
 
-load_dotenv()  # Load environment variables from .env file
+load_dotenv()  
+
+app = Flask(__name__)
 
 TWITTER_API_KEY = os.getenv('TWITTER_API_KEY')
 TWITTER_API_SECRET = os.getenv('TWITTER_API_SECRET')
 TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sentiment_dashboard.db'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -37,16 +39,18 @@ class User(UserMixin, db.Model):
 
 class Search(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    query = db.Column(db.String(128), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    query = db.Column(db.String(100))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(datetime.timezone.utc))
     results = db.relationship('Result', backref='search', lazy='dynamic')
 
 class Result(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.String(280))
-    sentiment = db.Column(db.Float)
+    sentiment = db.Column(db.String(50))
     search_id = db.Column(db.Integer, db.ForeignKey('search.id'))
+    user = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -73,7 +77,6 @@ def fetch_tweets(query):
     
     return tweets
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -95,9 +98,7 @@ def analyze():
             sentiment=sentiment, 
             search=search,
             user=tweet['user'],
-            created_at=tweet['created_at'],
-            retweet_count=tweet['retweet_count'],
-            favorite_count=tweet['favorite_count']
+            created_at=tweet['created_at']
         )
         db.session.add(result)
         results.append({
